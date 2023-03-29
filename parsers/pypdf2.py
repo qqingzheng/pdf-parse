@@ -3,6 +3,7 @@ from PyPDF2 import PdfReader
 from .common_types import *
 class PyPDF2(PDFParser):
     def __init__(self, buf):
+        raise Exception("Not Implemented")
         super().__init__(buf)
         self.pdf = PdfReader(stream=buf)
         self.content = ""

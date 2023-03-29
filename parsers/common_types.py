@@ -15,7 +15,8 @@ class MetaData():
         } 
     def __repr__(self):
         return str(self.__dict__())
-    
+    def __getitem__(self, __name: str):
+        return self.__dict__()[__name]
 class Outline():
     def __init__(self, title, page):
         self.title = title
@@ -24,9 +25,24 @@ class Outline():
     def add_sub_outline(self, outline):
         self.sub_outline.append(outline)
     def display(self, depth=0):
-        print("\t"*depth, end="")
-        print(f"{self.title}(self.page)")
+        output = ""
+        output += "\t"*depth
+        output += f"{self.title}({self.page})\n"
         for sub in self.sub_outline:
-            sub.display()
-    def __repr__(self):
+            output += sub.display(depth+1)
+        return output
+    def search(self, title):
+        result = -1
+        if(self.title == title):
+            result = self.page
+        else:
+            for sub in self.sub_outline:
+                sub_result = sub.search(title)
+                result = sub_result if sub_result != -1 else result
+        return result
+    def get_sub_count(self):
+        return len(self.sub_outline)
+    def __str__(self):
         return self.display()
+    def __repr__(self):
+        return self.__str__()
