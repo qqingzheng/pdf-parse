@@ -3,37 +3,64 @@ import fitz
 from .common_types import *
 from operator import itemgetter
 from itertools import groupby
+from lxml import etree
 import re
 class PyMuPDF(PDFParser):
-    def __init__(self, buf):
+    def __init__(self, buf, depth=5):
         super().__init__(buf)
         self.pdf = fitz.open("pdf", buf)
         self.content = ""
+        html_content = ""
         for page in self.pdf:
+            html_content += page.get_text("html")
             self.content += page.get_text("text")
-        # with open("test.html", "w") as file:
-        #     file.write(self.content)
-        self.blocks = {}
-        self.__load_blocks()
-    def get_block_content(self, name):
-        for title, content in self.blocks.items():
-            if re.search(f"{name}", title, re.IGNORECASE):
-                return content
+        self.html_tree = etree.HTML(html_content)
+        self.font_size_to_title = {}
+        self.root = Outline("Root", -1)
+        self.depth = depth
+        self.__load_titles()
+        self.__get_outline(self.root)
+    def get_block_content_by_tries(self, titles):
+        for title in titles:
+            result = self.get_block_content(title)
+            if result != "":
+                return result
         return ""
-    def __load_blocks(self):
-        self.blocks  = {}
-        now_block = "Others"
-        self.blocks [now_block] = ""
-        for page in self.pdf:
-            blocks = page.get_text("blocks", sort=False)
-            # print(blocks)
-            for block in blocks:
-                content = block[4]
-                if re.match(r"[0-9A-Z][\s\S]*[a-zA-Z]{4}[\s\S]*", content) and len(content) < 30 and len(content) > 2: 
-                    now_block = content
-                    self.blocks[now_block] = ""
-                else:
-                    self.blocks[now_block] += " " + content
+    def get_block_content(self, title):
+        title1 = title
+        title2 = self.root.search_sibling_title(self.root, title)
+        _span = self.html_tree.xpath('//span')
+        content = ""
+        start = False
+        for span in _span:
+            if re.match(f"{title1}", span.text, re.IGNORECASE):
+                start = True
+            elif re.match(f"{title2}", span.text, re.IGNORECASE):
+                break
+            elif start:
+                content += span.text
+        return content
+    def __load_titles(self):
+        i = 0
+        _span = self.html_tree.xpath('//b/span')
+        for span in _span:
+            font_size = float(re.search(r"([\d\.]+?)pt", span.get("style")).group(1))
+            if font_size not in self.font_size_to_title:
+                self.font_size_to_title[font_size] = []
+            self.font_size_to_title[font_size].append((i, span.text))
+            i = i + 1
+    def __get_outline(self, root: Outline, sibling_value=99, depth=0):
+        if len(self.font_size_to_title.keys()) <= depth or self.depth == depth:
+            return
+        title_size = list(self.font_size_to_title.keys())[depth]
+        c = 0
+        for i, title in self.font_size_to_title[title_size]:
+            next_sibling_value = self.font_size_to_title[title_size][c+1][0] if c+1 < len(self.font_size_to_title[title_size]) else 99
+            if i > root.value and i < sibling_value:
+                sub_node = Outline(title, i)
+                self.__get_outline(sub_node, next_sibling_value, depth+1)
+                root.add_sub_outline(sub_node)
+            c = c + 1
     def get_meta(self):
         """
         Keys: ['format', 'title', 'author', 'subject', 
@@ -57,78 +84,3 @@ class PyMuPDF(PDFParser):
             depth_ptr[outline[0]] = o
             depth_ptr[outline[0]-1].add_sub_outline(o)
         return self.root
-    def get_content_from_title(self, title1, title2):
-        """
-        return text between title1 and title2
-        """
-        page_id1 = self.root.search(title1)
-        page1 = self.pdf.load_page(page_id1-1)
-        search1 = page1.search_for(title1, hit_max=1)
-        rect1 = search1[0]
-        top = rect1.y1
-        page_id2 = self.root.search(title2)
-        page2 = self.pdf.load_page(page_id2-1)
-        search2 = page2.search_for(title2, hit_max=1)
-        rect2 = search2[0]
-        bottom = rect2.y0
-        if(page_id1 < page_id2):
-            return ParseTab(page1, [0, top, 9999, 9999]) + ParseTab(page2, [0, 0, 9999, bottom])
-        if(page_id1 == page_id2):
-            return ParseTab(page1, [0, top, 9999, bottom])
-        else:
-            return ""
-
-def ParseTab(page, bbox, columns=None):
-    tab_rect = fitz.Rect(bbox).irect
-    xmin, ymin, xmax, ymax = tuple(tab_rect)
-
-    if tab_rect.is_empty or tab_rect.is_infinite:
-        print("Warning: incorrect rectangle coordinates!")
-        return []
-
-    if type(columns) is not list or columns == []:
-        coltab = [tab_rect.x0, tab_rect.x1]
-    else:
-        coltab = sorted(columns)
-
-    if xmin < min(coltab):
-        coltab.insert(0, xmin)
-    if xmax > coltab[-1]:
-        coltab.append(xmax)
-
-    words = page.get_text("words")
-
-    if words == []:
-        print("Warning: page contains no text")
-        return []
-
-    alltxt = []
-
-    # get words contained in table rectangle and distribute them into columns
-    for w in words:
-        ir = fitz.Rect(w[:4]).irect  # word rectangle
-        if ir in tab_rect:
-            cnr = 0  # column index
-            for i in range(1, len(coltab)):  # loop over column coordinates
-                if ir.x0 < coltab[i]:  # word start left of column border
-                    cnr = i - 1
-                    break
-            alltxt.append([ir.x0, ir.y0, ir.x1, cnr, w[4]])
-
-    if alltxt == []:
-        print("Warning: no text found in rectangle!")
-        return []
-
-    alltxt.sort(key=itemgetter(1))  # sort words vertically
-
-    # create the table / matrix
-    spantab = []  # the output matrix
-
-    for y, zeile in groupby(alltxt, itemgetter(1)):
-        schema = [""] * (len(coltab) - 1)
-        for c, words in groupby(zeile, itemgetter(3)):
-            entry = " ".join([w[4] for w in words])
-            schema[c] = entry
-        spantab.append(schema)
-
-    return spantab

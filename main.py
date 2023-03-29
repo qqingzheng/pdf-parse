@@ -1,19 +1,28 @@
 from parsers import *
 import requests
+from lxml import etree
 import re
-def get_dict(title, url):
-    req = requests.get(url)
-    pymupdf = PyMuPDF(req.content)
+def get_dict(title, buf):
+    pymupdf = PyMuPDF(buf)
     result = {}
     result['title'] = title if pymupdf.get_meta()['title'] == '' else pymupdf.get_meta()['title']
     result['author'] = pymupdf.get_meta()['author']
     result['tag'] = pymupdf.get_meta()['keywords']
+    
     result['abstract'] = pymupdf.get_block_content("abstract")
     result['introduction'] = pymupdf.get_block_content("introduction")
-    result['background'] = pymupdf.get_block_content("background")
-    result['content'] = pymupdf.content
+    result['method'] = pymupdf.get_block_content_by_tries(["methods","method","methodology"])
+    result['related_works'] = pymupdf.get_block_content("related works")
+    result['conclusion'] = pymupdf.get_block_content("conclusion")
+    result['references'] = pymupdf.get_block_content("references")
+    result['experiments'] = pymupdf.get_block_content("experiments")
+
+    result['content'] = pymupdf.content # All content
     return result
-    
+def get_dict_from_url(title, url):
+    req = requests.get(url)
+    get_dict(title, req.content)
 
 if __name__ == "__main__":
-    print(get_dict("title", "https://arxiv.org/pdf/1706.03762.pdf"))
+    with open("/root/pdfparse/pdf-parser/2303.14871.pdf", "rb") as file:
+        print(get_dict("test", file.read()))
