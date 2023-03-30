@@ -42,11 +42,20 @@ class Outline():
                 sub_result = sub.search(title)
                 result = sub_result if sub_result != -1 else result
         return result
+    
     def get_idx_in_sub(self, title):
         for i, sub in enumerate(self.sub_outline):
             if re.search(f"{title}", sub.title, re.IGNORECASE):
                 return i
         return None
+    def search_title(self, title):
+        result = ""
+        if re.search(f"{title}", self.title, re.IGNORECASE):
+            return self.title
+        for sub in self.sub_outline:
+            sub_result = sub.search_title(title)
+            result = sub_result if sub_result != "" else result
+        return result
     def search_sibling_title(self, title):
         result = ""
         if re.search(f"{title}", self.title, re.IGNORECASE):
