@@ -19,9 +19,10 @@ class MetaData():
     def __getitem__(self, __name: str):
         return self.__dict__()[__name]
 class Outline():
-    def __init__(self, title, value):
+    def __init__(self, title, value, parent=None):
         self.title = title
         self.value = value
+        self.parent = parent
         self.sub_outline = []
     def add_sub_outline(self, outline):
         self.sub_outline.append(outline)
@@ -43,20 +44,24 @@ class Outline():
         return result
     def get_idx_in_sub(self, title):
         for i, sub in enumerate(self.sub_outline):
-            # print(sub.title)
             if re.search(f"{title}", sub.title, re.IGNORECASE):
                 return i
         return None
-    def search_sibling_title(self, root, title):
+    def search_sibling_title(self, title):
         result = ""
         if re.search(f"{title}", self.title, re.IGNORECASE):
-            sibling_idx = root.get_idx_in_sub(self.title) + 1
-            if sibling_idx >= root.get_sub_count():
-                result = None
-            else:
-                result = root.sub_outline[sibling_idx].title
+            ancester = self.parent
+            search_title = self.title
+            while ancester is not None:
+                print(ancester, search_title)
+                sibling_idx = ancester.get_idx_in_sub(search_title) + 1
+                if sibling_idx >= ancester.get_sub_count():
+                    search_title = ancester.title
+                    ancester = ancester.parent
+                else:
+                    return ancester.sub_outline[sibling_idx].title
         for sub in self.sub_outline:
-            sub_result = sub.search_sibling_title(self, title)
+            sub_result = sub.search_sibling_title(title)
             result = sub_result if sub_result != "" else result
         return result
     def get_sub_count(self):
