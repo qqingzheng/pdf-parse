@@ -38,7 +38,6 @@ class PyMuPDF(PDFParser):
     def get_block_content(self, title):
         title1 = title
         title2 = self.__root.search_sibling_title(title1)
-        print(title1, title2)
         span_list = self.__html_tree.xpath('//span')
         content = ""
         start = False

@@ -53,7 +53,6 @@ class Outline():
             ancester = self.parent
             search_title = self.title
             while ancester is not None:
-                print(ancester, search_title)
                 sibling_idx = ancester.get_idx_in_sub(search_title) + 1
                 if sibling_idx >= ancester.get_sub_count():
                     search_title = ancester.title
