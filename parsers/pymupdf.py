@@ -5,16 +5,15 @@ from operator import itemgetter
 from itertools import groupby
 from lxml import etree
 import re
+from math import ceil
 class PyMuPDF(PDFParser):
-    def __init__(self, buf, depth=3):
+    def __init__(self, buf, depth=3, split_size=3500):
         super().__init__(buf)
         self.pdf = fitz.open("pdf", buf)
-        
+        self.split_size = split_size
         raw_content = ""
         for page in self.pdf:
             raw_content += page.get_text("html")
-        with open("test.html", "w") as file:
-            file.write(raw_content)
         self.__html_tree = etree.HTML(raw_content)
         self.__font_size_to_title = {}
         self.__root = Outline("Root", -1)
@@ -34,7 +33,8 @@ class PyMuPDF(PDFParser):
         span_list = self.__html_tree.xpath('//span')
         content = ""
         for span in span_list:
-            content +=span.text + " "
+            if span.text is not None:
+                content += span.text + " "
         return content
     def get_block_content(self, title):
         title1 = self.__root.search_title(title)
@@ -43,13 +43,17 @@ class PyMuPDF(PDFParser):
         content = ""
         start = False
         for span in span_list:
-            if re.match(f"{title1}", span.text, re.IGNORECASE):
-                start = True
-            elif title2 != "" and re.match(f"{title2}", span.text, re.IGNORECASE):
-                break
-            elif start:
-                content +=span.text + " "
-        return content
+            if span.text is not None:
+                if re.match(f"{title1}", span.text, re.IGNORECASE):
+                    start = True
+                elif title2 != "" and re.match(f"{title2}", span.text, re.IGNORECASE):
+                    break
+                elif start:
+                    content +=span.text + " "
+        result = []
+        for i in range(ceil(len(content)/self.split_size)):
+            result.append(content[i*self.split_size:min((i+1)*self.split_size, len(content))])
+        return result
     def __load_titles(self):
         i = 0
         _span = self.__html_tree.xpath('//b/span')
@@ -64,7 +68,6 @@ class PyMuPDF(PDFParser):
             return
         title_size = list(self.__font_size_to_title.keys())[depth]
         c = 0
-        
         for i, title in self.__font_size_to_title[title_size]:
             next_sibling_value = self.__font_size_to_title[title_size][c+1][0] if c+1 < len(self.__font_size_to_title[title_size]) else 99
             if i > root.value and i < next_sibling_value:
