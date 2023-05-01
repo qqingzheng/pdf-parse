@@ -56,13 +56,21 @@ class PyMuPDF(PDFParser):
         return result
     def __load_titles(self):
         i = 0
+        with open("test.html", "w") as file:
+            file.write(etree.tostring(self.__html_tree).decode())
         _span = self.__html_tree.xpath('//b/span')
+        if len(_span) == 0:
+            span_list = self.__html_tree.xpath('//span')
+            for span in span_list:
+                style = (span.get('style'))
+                if "CMCSC10" in style:
+                    _span.append(span)
         for span in _span:
-            font_size = int(float(re.search(r"([\d\.]+?)pt", span.get("style")).group(1)))
-            if font_size not in self.__font_size_to_title:
-                self.__font_size_to_title[font_size] = []
-            self.__font_size_to_title[font_size].append((i, span.text))
-            i = i + 1
+                font_size = int(float(re.search(r"([\d\.]+?)pt", span.get("style")).group(1)))
+                if font_size not in self.__font_size_to_title:
+                    self.__font_size_to_title[font_size] = []
+                self.__font_size_to_title[font_size].append((i, span.text))
+                i = i + 1
     def __load_outline(self, root: Outline, depth=0):
         if len(self.__font_size_to_title.keys()) <= depth or self.__depth == depth:
             return
